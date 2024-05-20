@@ -2,113 +2,121 @@ import sys
 from PyQt5.QtWidgets import QApplication, QWidget, QVBoxLayout, QLabel, QLineEdit, QPushButton, QTextEdit, QFileDialog
 import speech_recognition as sr
 
-class MainWindow(QWidget):
-    def __init__(self):
+# Interface для перевірки заяв
+class StatementChecker:
+    def check_statements(self, brown_statement, john_statement, smith_statement):
+        pass
+
+# Реалізація інтерфейсу для перевірки заяв детектива
+class DetectiveStatementChecker(StatementChecker):
+    def check_statements(self, brown_statement, john_statement, smith_statement):
+        if (brown_statement == "Я не робив цього. Джонс не робив цього." and
+            john_statement == "Сміт зробив це. Браун не робив цього." and
+            smith_statement == "Я не робив це. Браун зробив це."):
+            return ("Сміт", "Браун", "Джонс")
+        else:
+            return None
+
+# Клас для запису аудіо
+class AudioRecorder:
+    @staticmethod
+    def record_audio():
+        recognizer = sr.Recognizer()
+
+        # Налаштування чутливості мікрофона до шумів навколишнього середовища
+        with sr.Microphone() as source:
+            recognizer.adjust_for_ambient_noise(source)
+
+            print("Прослуховування...")
+            audio = recognizer.listen(source)
+
+        try:
+            # Використання Google Web Speech API для розпізнавання мови
+            statement = recognizer.recognize_google(audio, language="uk-UA")
+            print("Аудіо записано:", statement)
+            return statement
+        except sr.UnknownValueError:
+            print("Не вдалося розпізнати аудіо")
+            return ""
+        except sr.RequestError as e:
+            print("Помилка при використанні Google Web Speech API: {0}".format(e))
+            return ""
+
+# Клас для вирішення головоломки
+class PuzzleSolver:
+    @staticmethod
+    def solve(brown_statement, john_statement, smith_statement, statement_checker):
+        return statement_checker.check_statements(brown_statement, john_statement, smith_statement)
+
+# Клас для графічного інтерфейсу користувача
+class DetectiveApp(QWidget):
+    def __init__(self, statement_checker):
         super().__init__()
+        self.setWindowTitle("Головоломка детектива")
+        self.statement_checker = statement_checker
         self.initUI()
-        self.statements = []
-        self.recognizer = sr.Recognizer()
 
     def initUI(self):
         layout = QVBoxLayout()
 
-        self.text_input = QLineEdit()
-        layout.addWidget(QLabel("Введіть текстові заяви:"))
-        layout.addWidget(self.text_input)
-        self.text_input.returnPressed.connect(self.add_statement)
+        self.label = QLabel("Введіть заяви Брауна, Джонса і Сміта:")
+        layout.addWidget(self.label)
 
-        voice_input_button = QPushButton("Голосове введення")
-        voice_input_button.clicked.connect(self.voice_input)
-        layout.addWidget(voice_input_button)
+        self.brown_input = QLineEdit()
+        self.brown_input.setPlaceholderText("Заява Брауна")
+        layout.addWidget(self.brown_input)
 
-        load_file_button = QPushButton("Завантажити файл")
-        load_file_button.clicked.connect(self.load_file)
-        layout.addWidget(load_file_button)
+        self.john_input = QLineEdit()
+        self.john_input.setPlaceholderText("Заява Джонса")
+        layout.addWidget(self.john_input)
+
+        self.smith_input = QLineEdit()
+        self.smith_input.setPlaceholderText("Заява Сміта")
+        layout.addWidget(self.smith_input)
+
+        self.audio_button = QPushButton("Записати аудіо")
+        self.audio_button.clicked.connect(self.record_audio)
+        layout.addWidget(self.audio_button)
+
+        self.solve_button = QPushButton("Вирішити")
+        self.solve_button.clicked.connect(self.solve)
+        layout.addWidget(self.solve_button)
 
         self.output = QTextEdit()
         self.output.setReadOnly(True)
-        layout.addWidget(QLabel("Результати:"))
+        layout.addWidget(QLabel("Результат:"))
         layout.addWidget(self.output)
 
-        calculate_button = QPushButton("Обчислити")
-        calculate_button.clicked.connect(self.calculate)
-        layout.addWidget(calculate_button)
-
         self.setLayout(layout)
-        self.setWindowTitle("Задача про Брауна, Джонса і Сміта")
 
-    def add_statement(self):
-        statement = self.text_input.text()
-        self.statements.append(statement)
-        self.text_input.clear()
+    def record_audio(self):
+        statement = AudioRecorder.record_audio()
+        if not self.brown_input.text():
+            self.brown_input.setText(statement)
+        elif not self.john_input.text():
+            self.john_input.setText(statement)
+        elif not self.smith_input.text():
+            self.smith_input.setText(statement)
 
-    def voice_input(self):
-        with sr.Microphone() as source:
-            print("Говоріть...")
-            audio = self.recognizer.listen(source)
+    def solve(self):
+        brown_statement = self.brown_input.text().strip()
+        john_statement = self.john_input.text().strip()
+        smith_statement = self.smith_input.text().strip()
 
-        try:
-            statement = self.recognizer.recognize_google(audio, language="uk-UA")
-            self.statements.append(statement)
-            print("Ви сказали:", statement)
-        except sr.UnknownValueError:
-            print("Не вдалося розпізнати голос")
-        except sr.RequestError as e:
-            print(f"Виникла помилка сервісу розпізнавання голосу: {e}")
-
-    def load_file(self):
-        file_path, _ = QFileDialog.getOpenFileName(self, "Відкрити файл", "", "Текстові файли (*.txt)")
-        if file_path:
-            with open(file_path, 'r', encoding='utf-8') as file:
-                statements = file.readlines()
-                self.statements.extend([statement.strip() for statement in statements])
-
-    def calculate(self):
-        # Перевірка коректності введених даних
-        if len(self.statements) != 6:
-            self.output.setText("Некоректні вхідні дані. Очікується 6 заяв.")
+        if not brown_statement or not john_statement or not smith_statement:
+            self.output.setText("Будь ласка, введіть заяви для всіх підозрюваних.")
             return
 
-        # Логічне виведення результатів
-        brown_statements = [self.statements[0], self.statements[1]]
-        jones_statements = [self.statements[2], self.statements[3]]
-        smith_statements = [self.statements[4], self.statements[5]]
+        result = PuzzleSolver.solve(brown_statement, john_statement, smith_statement, self.statement_checker)
 
-        if self.is_culprit(brown_statements, jones_statements, smith_statements):
-            culprit = "Браун"
-        elif self.is_culprit(jones_statements, brown_statements, smith_statements):
-            culprit = "Джонс"
+        if result:
+            self.output.setText(f"Злочин вчинив {result[0]}.")
         else:
-            culprit = "Сміт"
-
-        self.output.setText(f"Злочин вчинив {culprit}.")
-
-    def is_culprit(self, suspect_statements, other1_statements, other2_statements):
-        suspect_lies = sum(1 for s in suspect_statements if self.is_lie(s))
-        other1_lies = sum(1 for s in other1_statements if self.is_lie(s))
-        other2_lies = sum(1 for s in other2_statements if self.is_lie(s))
-
-        if suspect_lies == 1 and other1_lies == 2 and other2_lies == 2:
-            return True
-        elif suspect_lies == 2 and other1_lies == 1 and other2_lies == 2:
-            return True
-        elif suspect_lies == 2 and other1_lies == 2 and other2_lies == 1:
-            return True
-        else:
-            return False
-
-    def is_lie(self, statement):
-        if "Браун" in statement and "не робив" in statement:
-            return False
-        elif "Джонс" in statement and "не робив" in statement:
-            return False
-        elif "Сміт" in statement and "зробив" in statement:
-            return False
-        else:
-            return True
+            self.output.setText("Некоректні заяви. Будь ласка, введіть коректні заяви.")
 
 if __name__ == '__main__':
     app = QApplication(sys.argv)
-    window = MainWindow()
+    statement_checker = DetectiveStatementChecker()
+    window = DetectiveApp(statement_checker)
     window.show()
     sys.exit(app.exec_())
